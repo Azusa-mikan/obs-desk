@@ -16,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_client(new ObsClient(this))
     , m_state(new ObsState(m_client, this)) {
     setWindowTitle(tr("OBS Desk %1").arg(QCoreApplication::applicationVersion()));
-    resize(1000, 700);
+    resize(475, 700);
 
     m_connectWidget = new ConnectWidget(this);
     m_dashboard = new DashboardWidget(this);

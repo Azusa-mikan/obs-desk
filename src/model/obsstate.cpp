@@ -432,8 +432,14 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
         m_stats.fps = responseData.value(QStringLiteral("activeFps")).toDouble();
         m_stats.renderTimeMs = responseData.value(QStringLiteral("averageFrameRenderTime")).toDouble();
         m_stats.cpuUsage = responseData.value(QStringLiteral("cpuUsage")).toDouble();
-        m_stats.memoryUsage = toInt64(responseData.value(QStringLiteral("memoryUsage")));
-        m_stats.availableDiskSpace = toInt64(responseData.value(QStringLiteral("availableDiskSpace")));
+        // obs-websocket reports memoryUsage / availableDiskSpace in MiB
+        // (Os_ObjectHelper::GetStats divides by 1024*1024), while Stats stores
+        // bytes and formatMemory() divides by 1024*1024 for display.
+        constexpr double kMibToBytes = 1024.0 * 1024.0;
+        m_stats.memoryUsage =
+            static_cast<qint64>(responseData.value(QStringLiteral("memoryUsage")).toDouble() * kMibToBytes);
+        m_stats.availableDiskSpace =
+            static_cast<qint64>(responseData.value(QStringLiteral("availableDiskSpace")).toDouble() * kMibToBytes);
         m_stats.skippedFrames = responseData.value(QStringLiteral("outputSkippedFrames")).toInt();
         m_stats.totalFrames = responseData.value(QStringLiteral("outputTotalFrames")).toInt();
         emit statsChanged();
