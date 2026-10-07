@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=OBS Desk
+Comment=A Qt 6 desktop remote for OBS Studio
+Exec=obs_desk
+Icon=obs_desk
+Terminal=false
+Categories=AudioVideo;

@@ -44,6 +44,8 @@ target_link_libraries(obs_desk PRIVATE
     Qt6::WebSockets
 )
 
+target_compile_definitions(obs_desk PRIVATE OBS_DESK_VERSION="${PROJECT_VERSION}")
+
 if(WIN32)
     set_target_properties(obs_desk PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()

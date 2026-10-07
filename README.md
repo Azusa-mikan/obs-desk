@@ -7,6 +7,21 @@ Target user: someone on a computer (especially Linux) who wants a lightweight
 remote for OBS — switch scenes, toggle source visibility, adjust/mute audio,
 start & stop streaming/recording, and watch live stats.
 
+Current version: **0.1.0**.
+
+## Download
+
+Grab the latest `OBS_Desk-<version>-x86_64.AppImage` from the
+[GitHub Releases](../../releases) page, make it executable, and run it — no
+Qt installation is required on the target machine:
+
+```sh
+chmod +x OBS_Desk-0.1.0-x86_64.AppImage
+./OBS_Desk-0.1.0-x86_64.AppImage
+```
+
+The AppImage bundles Qt and supports both X11 and Wayland.
+
 ## Features
 
 - Connect to OBS over WebSocket v5, with optional password authentication.

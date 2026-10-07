@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build and release'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 file
+
+      - name: Compute version and tag
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+            tag="v${version}"
+          else
+            tag="$GITHUB_REF_NAME"
+            version="${tag#v}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Build AppImage
+        run: |
+          chmod +x tool/build_appimage.sh
+          tool/build_appimage.sh "${{ steps.ver.outputs.version }}"
+
+      - name: Smoke test AppImage
+        run: |
+          set +e
+          XDG_CONFIG_HOME="$RUNNER_TEMP/obsdesk" APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen \
+            timeout 5 build-appimage/OBS_Desk-*.AppImage
+          code=$?
+          set -e
+          echo "AppImage exit code: $code"
+          if [ "$code" -ne 124 ]; then
+            echo "::error::AppImage did not start cleanly (expected timeout 124, got $code)"
+            exit 1
+          fi
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: build-appimage/OBS_Desk-*.AppImage
+          generate_release_notes: true
+          fail_on_unmatched_files: true

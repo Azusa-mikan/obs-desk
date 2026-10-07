@@ -15,4 +15,5 @@ compile_commands.json
 *.o
 *.so
 *.a
+*.AppImage
 obs_desk
