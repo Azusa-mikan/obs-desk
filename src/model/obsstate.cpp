@@ -34,6 +34,26 @@ ObsState::ObsState(ObsClient *client, QObject *parent)
     connect(m_pollTimer, &QTimer::timeout, this, &ObsState::onPollTick);
 }
 
+// --- accessors -------------------------------------------------------------
+
+QVector<ObsState::AudioInput> ObsState::globalAudioInputs() const {
+    QVector<AudioInput> result;
+    for (const AudioInput &input : m_audioInputs) {
+        if (input.hasAudio && input.global)
+            result.append(input);
+    }
+    return result;
+}
+
+QVector<ObsState::AudioInput> ObsState::sceneAudioInputs() const {
+    QVector<AudioInput> result;
+    for (const AudioInput &input : m_audioInputs) {
+        if (input.hasAudio && !input.global)
+            result.append(input);
+    }
+    return result;
+}
+
 // --- actions ---------------------------------------------------------------
 
 void ObsState::setCurrentScene(const QString &name) {
@@ -88,6 +108,7 @@ void ObsState::onIdentified() {
     m_client->sendRequest(obs::req::GetVersion);
     fetchSceneList();   // also triggers GetSceneItemList for the active scene
     fetchInputList();   // also triggers per-input volume/mute fetches
+    m_client->sendRequest(obs::req::GetSpecialInputs); // global audio names
     m_client->sendRequest(obs::req::GetStreamStatus);
     m_client->sendRequest(obs::req::GetRecordStatus);
 
@@ -112,6 +133,7 @@ void ObsState::reset() {
     m_pendingSceneItems.clear();
     m_volumeQueue.clear();
     m_muteQueue.clear();
+    m_globalInputNames.clear();
 
     emit scenesChanged();
     emit currentSceneChanged(m_currentScene);
@@ -247,6 +269,12 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
                 input = previous.value(name);
             inputs.append(input);
         }
+        // Apply the global grouping from GetSpecialInputs. Doing it here (rather
+        // than only in the GetSpecialInputs handler) makes the two replies
+        // order-independent: whichever arrives last still produces the right
+        // grouping.
+        for (AudioInput &input : inputs)
+            input.global = m_globalInputNames.contains(input.name);
         m_audioInputs = inputs;
         emit audioInputsChanged();
 
@@ -262,6 +290,24 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
         return;
     }
 
+    if (requestType == obs::req::GetSpecialInputs) {
+        // Six fields, each a name or null: the global (desktop/mic) inputs.
+        // Record their names and re-tag every known input so the panel can
+        // split Global from Scene, whichever reply arrived first.
+        static const char *const kFields[] = {"desktop1", "desktop2", "mic1",
+                                              "mic2",     "mic3",     "mic4"};
+        m_globalInputNames.clear();
+        for (const char *field : kFields) {
+            const QString name = responseData.value(QString::fromLatin1(field)).toString();
+            if (!name.isEmpty())
+                m_globalInputNames.insert(name);
+        }
+        for (AudioInput &input : m_audioInputs)
+            input.global = m_globalInputNames.contains(input.name);
+        emit audioInputsChanged();
+        return;
+    }
+
     if (requestType == obs::req::GetInputVolume) {
         // Replies are matched positionally to the FIFO queue (see header).
         if (m_volumeQueue.isEmpty()) {
@@ -271,6 +317,10 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
         const double mul = responseData.value(QStringLiteral("inputVolumeMul")).toDouble(1.0);
         for (AudioInput &input : m_audioInputs) {
             if (input.name == name) {
+                // A successful GetInputVolume proves the source supports audio
+                // (the 604 branch in onRequestFailed() is the negative case).
+                input.capabilityKnown = true;
+                input.hasAudio = true;
                 input.volumeMul = mul;
                 emit audioInputsChanged();
                 break;
@@ -329,6 +379,38 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
 }
 
 void ObsState::onRequestFailed(const QString &requestType, int code, const QString &comment) {
+    // A per-input probe finishes on failure too: obs-websocket answers every
+    // request, so the FIFO must always advance. Without this, one non-audio
+    // source (604 below) would stall all later volume/mute fetches behind it.
+    if (requestType == obs::req::GetInputVolume) {
+        if (m_volumeQueue.isEmpty())
+            return;
+        const QString name = m_volumeQueue.takeFirst();
+        if (code == 604) {
+            // 604 = InvalidResourceState: "the specified input does not support
+            // audio". This is the expected reply for video-only sources, so mark
+            // the capability instead of surfacing an error.
+            for (AudioInput &input : m_audioInputs) {
+                if (input.name == name) {
+                    input.capabilityKnown = true;
+                    input.hasAudio = false;
+                    emit audioInputsChanged();
+                    break;
+                }
+            }
+        }
+        pumpVolumeQueue();
+        return;
+    }
+
+    if (requestType == obs::req::GetInputMute) {
+        if (m_muteQueue.isEmpty())
+            return;
+        m_muteQueue.takeFirst();
+        pumpMuteQueue();
+        return;
+    }
+
     emit errorOccurred(tr("%1 failed (code %2): %3").arg(requestType).arg(code).arg(comment));
 }
 

@@ -13,7 +13,9 @@ start & stop streaming/recording, and watch live stats.
 - **Scenes**: list sorted top-layer-first; click to switch the program scene.
 - **Scene Items**: checkbox per source to show/hide it (groups are shown as a
   single item in this MVP).
-- **Audio**: per-input volume slider (0–2000%) and a mute toggle.
+- **Audio**: per-input volume slider (0–100%, matching OBS's 0 dB fader) and
+  a mute toggle. Only inputs confirmed to support audio are listed, and they
+  are grouped into **Global** and **Scene** sections like OBS's own mixer.
 - **Output**: start/stop streaming and recording.
 - **Stats**: FPS, CPU, memory, dropped frames, average stream bitrate and
   stream time, refreshed once per second.
@@ -84,8 +86,10 @@ The last-used connection is stored with `QSettings`
 - If **Remember password** is checked, the password is kept in plain text in
   `QSettings`; there is no OS secret store integration.
 - Only the top-level scene items of the current scene are managed.
-- Audio volume/mute are refreshed by fetching each input one at a time after
-  the input list changes.
+- Audio capability is probed per input: sources without audio (images, text,
+  colour sources, ...) are hidden rather than shown with a dead control. The
+  volume/mute of each audio input is fetched one at a time after the input
+  list changes.
 
 ## Disclaimer
 

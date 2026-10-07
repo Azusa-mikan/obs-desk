@@ -52,7 +52,10 @@ private:
     QListWidget *m_sceneList = nullptr;
     QListWidget *m_sceneItemList = nullptr;
 
-    QVBoxLayout *m_audioLayout = nullptr;
+    QVBoxLayout *m_globalAudioLayout = nullptr;
+    QVBoxLayout *m_sceneAudioLayout = nullptr;
+    QLabel *m_globalAudioPlaceholder = nullptr;
+    QLabel *m_sceneAudioPlaceholder = nullptr;
     QHash<QString, AudioRow *> m_audioRows;
 
     QPushButton *m_streamButton = nullptr;

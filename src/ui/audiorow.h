@@ -8,7 +8,7 @@ class QToolButton;
 
 /// One audio input row: name, volume slider and a mute toggle.
 ///
-/// The slider works in "percent" units (0-2000) so that `mul = value / 100.0`
+/// The slider works in "percent" units (0-100) so that `mul = value / 100.0`
 /// and the label can show `value%` directly (mul 1.0 -> "100%").
 /// `setVolume()` / `setMuted()` write state back from the model without
 /// re-emitting the change signals (they use QSignalBlocker), so the UI can be

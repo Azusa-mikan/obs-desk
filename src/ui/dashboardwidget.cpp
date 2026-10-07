@@ -11,6 +11,7 @@
 #include <QListWidgetItem>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QVBoxLayout>
 
 namespace {
@@ -87,9 +88,37 @@ QWidget *DashboardWidget::buildAudioSection() {
     scroll->setWidgetResizable(true);
 
     auto *container = new QWidget(scroll);
-    m_audioLayout = new QVBoxLayout(container);
-    m_audioLayout->setContentsMargins(2, 2, 2, 2);
-    m_audioLayout->addStretch(1);
+    auto *containerLayout = new QVBoxLayout(container);
+    containerLayout->setContentsMargins(2, 2, 2, 2);
+
+    QFont sectionFont = container->font();
+    sectionFont.setBold(true);
+
+    auto *globalTitle = new QLabel(tr("GLOBAL"), container);
+    globalTitle->setFont(sectionFont);
+    containerLayout->addWidget(globalTitle);
+
+    m_globalAudioPlaceholder = new QLabel(tr("No global audio sources"), container);
+    containerLayout->addWidget(m_globalAudioPlaceholder);
+
+    auto *globalContainer = new QWidget(container);
+    m_globalAudioLayout = new QVBoxLayout(globalContainer);
+    m_globalAudioLayout->setContentsMargins(0, 0, 0, 0);
+    containerLayout->addWidget(globalContainer);
+
+    auto *sceneTitle = new QLabel(tr("SCENE"), container);
+    sceneTitle->setFont(sectionFont);
+    containerLayout->addWidget(sceneTitle);
+
+    m_sceneAudioPlaceholder = new QLabel(tr("No audio sources in this scene"), container);
+    containerLayout->addWidget(m_sceneAudioPlaceholder);
+
+    auto *sceneContainer = new QWidget(container);
+    m_sceneAudioLayout = new QVBoxLayout(sceneContainer);
+    m_sceneAudioLayout->setContentsMargins(0, 0, 0, 0);
+    containerLayout->addWidget(sceneContainer);
+
+    containerLayout->addStretch(1);
     scroll->setWidget(container);
 
     auto *layout = new QVBoxLayout(box);
@@ -243,42 +272,59 @@ void DashboardWidget::onAudioInputsChanged() {
     if (!m_state)
         return;
 
-    const QVector<ObsState::AudioInput> &inputs = m_state->audioInputs();
+    // Only confirmed-audio inputs are exposed, split into the two sections.
+    const QVector<ObsState::AudioInput> globalInputs = m_state->globalAudioInputs();
+    const QVector<ObsState::AudioInput> sceneInputs = m_state->sceneAudioInputs();
 
-    // Drop rows for inputs that disappeared. reserve(1) protects the trailing
-    // stretch item from being included in the removal pass.
+    // Target set of confirmed-audio input names across both sections.
+    QSet<QString> target;
+    for (const ObsState::AudioInput &input : globalInputs)
+        target.insert(input.name);
+    for (const ObsState::AudioInput &input : sceneInputs)
+        target.insert(input.name);
+
+    // Drop rows for inputs that disappeared.
     for (auto it = m_audioRows.begin(); it != m_audioRows.end();) {
-        bool stillPresent = false;
-        for (const ObsState::AudioInput &input : inputs) {
-            if (input.name == it.key()) {
-                stillPresent = true;
-                break;
-            }
-        }
-        if (stillPresent) {
+        if (target.contains(it.key())) {
             ++it;
-        } else {
-            AudioRow *row = it.value();
-            m_audioLayout->removeWidget(row);
-            row->deleteLater();
-            it = m_audioRows.erase(it);
+            continue;
         }
+        AudioRow *row = it.value();
+        if (auto *rowLayout = qobject_cast<QVBoxLayout *>(row->parentWidget()->layout()))
+            rowLayout->removeWidget(row);
+        row->deleteLater();
+        it = m_audioRows.erase(it);
     }
 
-    // Create/refresh rows; insert new ones before the trailing stretch.
-    for (const ObsState::AudioInput &input : inputs) {
-        AudioRow *row = m_audioRows.value(input.name, nullptr);
-        if (!row) {
-            row = new AudioRow(input.name, this);
-            connect(row, &AudioRow::volumeChanged, m_state, &ObsState::setInputVolume);
-            connect(row, &AudioRow::muteToggled, m_state, &ObsState::setInputMute);
-            // last layout item is the stretch added in buildAudioSection()
-            m_audioLayout->insertWidget(m_audioLayout->count() - 1, row);
-            m_audioRows.insert(input.name, row);
+    // Create/refresh rows in their section, then backfill values.
+    auto refreshSection = [this](const QVector<ObsState::AudioInput> &inputs, QVBoxLayout *layout) {
+        QWidget *section = layout->parentWidget();
+        for (const ObsState::AudioInput &input : inputs) {
+            AudioRow *row = m_audioRows.value(input.name, nullptr);
+            if (!row) {
+                row = new AudioRow(input.name, this);
+                connect(row, &AudioRow::volumeChanged, m_state, &ObsState::setInputVolume);
+                connect(row, &AudioRow::muteToggled, m_state, &ObsState::setInputMute);
+                m_audioRows.insert(input.name, row);
+                layout->addWidget(row);
+            } else if (row->parentWidget() != section) {
+                // The input was re-tagged global/scene after its row was built
+                // (GetSpecialInputs can arrive after GetInputList): move it.
+                if (auto *oldLayout = qobject_cast<QVBoxLayout *>(row->parentWidget()->layout()))
+                    oldLayout->removeWidget(row);
+                layout->addWidget(row);
+            }
+            // setVolume/setMuted use QSignalBlocker internally, so this
+            // write-back does not bounce out as a SetInputVolume/SetInputMute.
+            row->setVolume(input.volumeMul);
+            row->setMuted(input.muted);
         }
-        row->setVolume(input.volumeMul);
-        row->setMuted(input.muted);
-    }
+    };
+    refreshSection(globalInputs, m_globalAudioLayout);
+    refreshSection(sceneInputs, m_sceneAudioLayout);
+
+    m_globalAudioPlaceholder->setVisible(globalInputs.isEmpty());
+    m_sceneAudioPlaceholder->setVisible(sceneInputs.isEmpty());
 }
 
 // --- output / stats --------------------------------------------------------

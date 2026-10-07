@@ -2,6 +2,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -36,6 +37,15 @@ public:
         QString name;
         double volumeMul = 1.0;
         bool muted = false;
+        /// True once a GetInputVolume probe succeeded, i.e. the source really
+        /// supports audio. Only such inputs are exposed to the UI.
+        bool hasAudio = false;
+        /// True once the audio-capability probe has completed, regardless of
+        /// the outcome (success or the 604 "does not support audio" error).
+        bool capabilityKnown = false;
+        /// True when the name comes from GetSpecialInputs (desktop/mic inputs),
+        /// which OBS shows in its own "Global" mixer section.
+        bool global = false;
     };
 
     struct Output {
@@ -59,7 +69,10 @@ public:
     const QVector<QString> &scenes() const { return m_scenes; }
     QString currentScene() const { return m_currentScene; }
     const QVector<SceneItem> &sceneItems() const { return m_sceneItems; }
-    const QVector<AudioInput> &audioInputs() const { return m_audioInputs; }
+    /// Inputs confirmed to support audio (hasAudio), split the same way OBS
+    /// splits its mixer: global inputs first, then everything else.
+    QVector<AudioInput> globalAudioInputs() const;
+    QVector<AudioInput> sceneAudioInputs() const;
     Output streamStatus() const { return m_stream; }
     Output recordStatus() const { return m_record; }
     Stats stats() const { return m_stats; }
@@ -121,6 +134,11 @@ private:
     // echo the scene name in the response, so it is tracked here and the
     // reply is ignored if the user has since switched scenes.
     QString m_pendingSceneItems;
+
+    // Names returned by GetSpecialInputs (desktop/mic inputs). Inputs in this
+    // set are reported as "global" in the audio panel. Kept separate from
+    // m_audioInputs so the reply can be applied whichever order it arrives in.
+    QSet<QString> m_globalInputNames;
 
     // Per-input volume/mute replies are mapped back to inputs positionally:
     // only one request of each type is in flight at a time (FIFO), which is

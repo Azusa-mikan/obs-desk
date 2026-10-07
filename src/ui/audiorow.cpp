@@ -9,8 +9,10 @@
 #include <algorithm>
 
 namespace {
-// Slider range is 0-2000 "percent" units; mul = value / 100.0.
-constexpr int kSliderMax = 2000;
+// Slider range is 0-100 "percent" units; mul = value / 100.0. OBS's own mixer
+// faders top out at 0 dB = 100% (mul 1.0), and the obs-websocket client
+// reference implementation uses the same 0.0-1.0 range.
+constexpr int kSliderMax = 100;
 constexpr double kSliderScale = 100.0;
 } // namespace
 
