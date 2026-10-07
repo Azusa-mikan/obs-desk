@@ -4,7 +4,7 @@
 #
 # Usage: tool/build_appimage.sh [VERSION]
 #
-# VERSION defaults to 0.1.0. The script builds the project in Release mode,
+# VERSION defaults to 0.1.1. The script builds the project in Release mode,
 # assembles an AppDir, downloads linuxdeploy + its Qt plugin on first run, and
 # produces build-appimage/OBS_Desk-<VERSION>-x86_64.AppImage.
 #
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.1.1}"
 
 WORK="$REPO_ROOT/build-appimage"
 APPDIR="$WORK/AppDir"
