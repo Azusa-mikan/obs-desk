@@ -7,6 +7,7 @@ class QLabel;
 class QStackedWidget;
 class ConnectWidget;
 class DashboardWidget;
+class PreviewWindow;
 class ObsClient;
 class ObsState;
 
@@ -28,6 +29,7 @@ private slots:
     void onObsVersionChanged(const QString &version);
     void onObsExiting();
     void onModelError(const QString &message);
+    void onPreviewRequested();
 
 private:
     void updateStatusBar();
@@ -38,6 +40,7 @@ private:
     QStackedWidget *m_stack = nullptr;
     ConnectWidget *m_connectWidget = nullptr;
     DashboardWidget *m_dashboard = nullptr;
+    PreviewWindow *m_preview = nullptr; // created on first request
     QLabel *m_statusLabel = nullptr;
 
     QString m_obsVersion;

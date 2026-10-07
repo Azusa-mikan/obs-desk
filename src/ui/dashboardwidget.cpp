@@ -129,18 +129,21 @@ QWidget *DashboardWidget::buildAudioSection() {
 QWidget *DashboardWidget::buildOutputSection() {
     auto *box = new QGroupBox(tr("Output"), this);
 
+    m_previewButton = new QPushButton(tr("Open Preview"), box);
     m_streamButton = new QPushButton(tr("Start Streaming"), box);
     m_recordButton = new QPushButton(tr("Start Recording"), box);
     m_streamStatusLabel = new QLabel(tr("Stream: idle"), box);
     m_recordStatusLabel = new QLabel(tr("Record: idle"), box);
 
     auto *layout = new QVBoxLayout(box);
+    layout->addWidget(m_previewButton);
     layout->addWidget(m_streamButton);
     layout->addWidget(m_streamStatusLabel);
     layout->addWidget(m_recordButton);
     layout->addWidget(m_recordStatusLabel);
     layout->addStretch(1);
 
+    connect(m_previewButton, &QPushButton::clicked, this, &DashboardWidget::previewRequested);
     connect(m_streamButton, &QPushButton::clicked, this, [this]() {
         if (!m_state)
             return;

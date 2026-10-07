@@ -17,6 +17,9 @@ start & stop streaming/recording, and watch live stats.
   a mute toggle. Only inputs confirmed to support audio are listed, and they
   are grouped into **Global** and **Scene** sections like OBS's own mixer.
 - **Output**: start/stop streaming and recording.
+- **Program Preview**: a separate window showing the current Program scene
+  live (~10 fps, screenshot width capped at 960 px, Program scene only).
+  Closing the window stops the requests entirely.
 - **Stats**: FPS, CPU, memory, dropped frames, average stream bitrate and
   stream time, refreshed once per second.
 - Live updates wired to obs-websocket events (scene changes, item visibility,
@@ -80,7 +83,8 @@ The last-used connection is stored with `QSettings`
 ## Limitations (MVP scope)
 
 - No automatic reconnect.
-- No preview/screenshot of the program output.
+- The Program preview is a low-rate JPEG snapshot loop (~10 fps), not a
+  video stream; it only shows the Program scene (no Studio Mode / Preview).
 - No transitions, filters, or Studio Mode support.
 - Groups are treated as ordinary scene items (their children are not listed).
 - If **Remember password** is checked, the password is kept in plain text in

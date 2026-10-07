@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QByteArray>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QSet>
@@ -77,8 +79,14 @@ public:
     Output recordStatus() const { return m_record; }
     Stats stats() const { return m_stats; }
     QString obsVersion() const { return m_obsVersion; }
+    /// True while the Program preview loop is switched on.
+    bool previewEnabled() const { return m_previewEnabled; }
 
     // --- actions -----------------------------------------------------------
+    /// Turns the self-driving Program screenshot loop on/off. Turning it off
+    /// produces zero further network traffic; the flag is kept across a
+    /// disconnect so an open window can resume once reconnected.
+    void setPreviewEnabled(bool enabled);
     void setCurrentScene(const QString &name);
     void setSceneItemEnabled(int sceneItemId, bool enabled);
     void setInputVolume(const QString &inputName, double mul);
@@ -101,6 +109,11 @@ signals:
     void obsExiting();
     /// A request failed or the model hit an unexpected value.
     void errorOccurred(const QString &message);
+    /// A decoded Program-scene screenshot arrived (raw image bytes, base64
+    /// already stripped).
+    void previewFrameReady(const QByteArray &imageBytes);
+    /// The preview loop was switched off.
+    void previewStopped();
 
 private slots:
     void onIdentified();
@@ -117,6 +130,7 @@ private:
     void fetchInputList();
     void pumpVolumeQueue();
     void pumpMuteQueue();
+    void sendPreviewFrame();
 
     ObsClient *m_client = nullptr;
     QTimer *m_pollTimer = nullptr;
@@ -150,4 +164,16 @@ private:
     // Guards against reacting to our own slider write-back loops is handled in
     // the UI layer via QSignalBlocker; the model simply stores values.
     bool m_active = false;
+
+    // --- Program preview loop ----------------------------------------------
+    // Self-driving screenshot loop (~10 fps): a new GetSourceScreenshot is
+    // only issued after the previous reply (or its failure) comes back, which
+    // bounds the rate and avoids piling up requests when OBS is slow. While
+    // disabled the loop sends nothing at all (zero network cost), but the
+    // enabled flag survives a disconnect so an open window resumes on
+    // reconnect. Deliberately independent of the volume/mute FIFO queues.
+    bool m_previewEnabled = false;
+    bool m_previewInFlight = false;
+    QTimer *m_previewTimer = nullptr; // single-shot: pacing and failure retry
+    QElapsedTimer m_previewSince;     // time of the last preview send
 };

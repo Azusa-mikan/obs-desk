@@ -4,6 +4,7 @@
 #include "protocol/obsclient.h"
 #include "ui/connectwidget.h"
 #include "ui/dashboardwidget.h"
+#include "ui/previewwindow.h"
 
 #include <QLabel>
 #include <QStackedWidget>
@@ -37,6 +38,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_state, &ObsState::obsVersionChanged, this, &MainWindow::onObsVersionChanged);
     connect(m_state, &ObsState::obsExiting, this, &MainWindow::onObsExiting);
     connect(m_state, &ObsState::errorOccurred, this, &MainWindow::onModelError);
+    connect(m_dashboard, &DashboardWidget::previewRequested, this, &MainWindow::onPreviewRequested);
 
     updateStatusBar();
 }
@@ -57,6 +59,8 @@ void MainWindow::onIdentified() {
 void MainWindow::onConnectionClosed() {
     m_connected = false;
     m_obsVersion.clear();
+    if (m_preview)
+        m_preview->close(); // closeEvent -> setPreviewEnabled(false)
     m_dashboard->setLocked(true);
     m_stack->setCurrentWidget(m_connectWidget);
     m_connectWidget->setBusy(false);
@@ -72,6 +76,8 @@ void MainWindow::onConnectionFailed(const QString &reason) {
     m_connected = false;
     m_obsVersion.clear();
     m_exiting = false;
+    if (m_preview)
+        m_preview->close(); // closeEvent -> setPreviewEnabled(false)
     m_dashboard->setLocked(true);
     m_stack->setCurrentWidget(m_connectWidget);
     m_connectWidget->setBusy(false);
@@ -92,6 +98,16 @@ void MainWindow::onObsExiting() {
 
 void MainWindow::onModelError(const QString &message) {
     statusBar()->showMessage(message, 5000);
+}
+
+void MainWindow::onPreviewRequested() {
+    // Create the window lazily; it is a top-level widget owned by MainWindow,
+    // so Qt deletes it with the parent.
+    if (!m_preview)
+        m_preview = new PreviewWindow(m_state, this);
+    m_preview->show();
+    m_preview->raise();
+    m_preview->activateWindow();
 }
 
 void MainWindow::updateStatusBar() {

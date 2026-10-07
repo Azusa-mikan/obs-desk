@@ -27,6 +27,10 @@ public:
     /// Disables the whole control surface (used when the socket drops).
     void setLocked(bool locked);
 
+signals:
+    /// The user asked to open the Program preview window.
+    void previewRequested();
+
 private slots:
     void onScenesChanged();
     void onCurrentSceneChanged(const QString &name);
@@ -58,6 +62,7 @@ private:
     QLabel *m_sceneAudioPlaceholder = nullptr;
     QHash<QString, AudioRow *> m_audioRows;
 
+    QPushButton *m_previewButton = nullptr;
     QPushButton *m_streamButton = nullptr;
     QPushButton *m_recordButton = nullptr;
     QLabel *m_streamStatusLabel = nullptr;

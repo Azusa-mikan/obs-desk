@@ -3,6 +3,7 @@
 #include "protocol/obsclient.h"
 #include "protocol/obsprotocol.h"
 
+#include <QByteArray>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -13,6 +14,13 @@
 namespace {
 constexpr int kPollIntervalMs = 1000;
 
+// Program preview pacing: at least 100 ms between two GetSourceScreenshot
+// sends (~10 fps), and a 1 s back-off before retrying a failed screenshot.
+// The width is capped at 960 px; OBS scales by width and keeps the aspect.
+constexpr int kPreviewMinIntervalMs = 100;
+constexpr int kPreviewRetryDelayMs = 1000;
+constexpr int kPreviewWidth = 960;
+
 /// Reads a JSON number that may be an integer or a double.
 qint64 toInt64(const QJsonValue &value) {
     return static_cast<qint64>(value.toDouble());
@@ -22,8 +30,11 @@ qint64 toInt64(const QJsonValue &value) {
 ObsState::ObsState(ObsClient *client, QObject *parent)
     : QObject(parent)
     , m_client(client)
-    , m_pollTimer(new QTimer(this)) {
+    , m_pollTimer(new QTimer(this))
+    , m_previewTimer(new QTimer(this)) {
     m_pollTimer->setInterval(kPollIntervalMs);
+    m_previewTimer->setSingleShot(true);
+    connect(m_previewTimer, &QTimer::timeout, this, &ObsState::sendPreviewFrame);
 
     connect(m_client, &ObsClient::identified, this, &ObsState::onIdentified);
     connect(m_client, &ObsClient::connectionClosed, this, &ObsState::onDisconnected);
@@ -100,6 +111,43 @@ void ObsState::stopRecord() {
     m_client->sendRequest(obs::req::StopRecord);
 }
 
+void ObsState::setPreviewEnabled(bool enabled) {
+    if (enabled == m_previewEnabled)
+        return;
+    m_previewEnabled = enabled;
+
+    if (!enabled) {
+        // Closing the window must leave zero network traffic: cancel any
+        // pending re-send and forget the in-flight frame so its reply cannot
+        // schedule another request.
+        m_previewTimer->stop();
+        m_previewInFlight = false;
+        emit previewStopped();
+        return;
+    }
+
+    // If already identified, start immediately; otherwise onIdentified() (and
+    // the GetSceneList reply that follows it) will kick the loop off.
+    if (m_active)
+        sendPreviewFrame();
+}
+
+// Self-driving loop: a frame is only requested after the previous one came
+// back, so the pace is bounded by OBS's response time and the 100 ms floor.
+void ObsState::sendPreviewFrame() {
+    if (!m_previewEnabled || !m_active || m_currentScene.isEmpty() || m_previewInFlight)
+        return;
+    m_previewTimer->stop(); // supersede any pending paced/retry send
+    m_previewInFlight = true;
+    m_previewSince.start();
+    QJsonObject d;
+    d[QStringLiteral("sourceName")] = m_currentScene;
+    d[QStringLiteral("imageFormat")] = QStringLiteral("jpg");
+    d[QStringLiteral("imageWidth")] = kPreviewWidth;
+    d[QStringLiteral("imageCompressionQuality")] = -1;
+    m_client->sendRequest(obs::req::GetSourceScreenshot, d);
+}
+
 // --- lifecycle -------------------------------------------------------------
 
 void ObsState::onIdentified() {
@@ -113,6 +161,12 @@ void ObsState::onIdentified() {
     m_client->sendRequest(obs::req::GetRecordStatus);
 
     m_pollTimer->start();
+
+    // Resume the preview loop if its window is still open. The scene name is
+    // not known yet, so sendPreviewFrame() no-ops here and the GetSceneList
+    // reply below actually starts it.
+    if (m_previewEnabled)
+        sendPreviewFrame();
 }
 
 void ObsState::onDisconnected() {
@@ -122,6 +176,11 @@ void ObsState::onDisconnected() {
 }
 
 void ObsState::reset() {
+    // Stop the preview loop but leave m_previewEnabled alone: the window may
+    // still be open and should resume automatically after a reconnect.
+    m_previewTimer->stop();
+    m_previewInFlight = false;
+
     m_scenes.clear();
     m_currentScene.clear();
     m_sceneItems.clear();
@@ -216,6 +275,12 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
 
         emit scenesChanged();
         emit currentSceneChanged(m_currentScene);
+
+        // (Re)start the preview loop now that the program scene is known. On
+        // reconnect this is the first moment the scene name exists, because
+        // onIdentified() runs before the GetSceneList reply.
+        if (m_previewEnabled)
+            sendPreviewFrame();
 
         if (!m_currentScene.isEmpty())
             requestSceneItems(m_currentScene);
@@ -375,6 +440,29 @@ void ObsState::onResponse(const QString &requestType, const QJsonObject &respons
         return;
     }
 
+    if (requestType == obs::req::GetSourceScreenshot) {
+        const QString imageData = responseData.value(QStringLiteral("imageData")).toString();
+        // `imageData` is a data URI such as
+        // "data:image/jpeg;base64,<BASE64>": take the payload after the comma.
+        // Defensively treat the whole string as base64 when there is none.
+        const int comma = imageData.indexOf(QLatin1Char(','));
+        const QByteArray encoded = (comma >= 0 ? imageData.mid(comma + 1) : imageData).toLatin1();
+        emit previewFrameReady(QByteArray::fromBase64(encoded));
+
+        m_previewInFlight = false;
+        if (!m_previewEnabled)
+            return;
+
+        // ~10 fps floor: send the next frame now if the interval already
+        // elapsed, otherwise wait out the remainder with the single-shot timer.
+        const qint64 elapsed = m_previewSince.elapsed();
+        if (elapsed >= kPreviewMinIntervalMs)
+            sendPreviewFrame();
+        else
+            m_previewTimer->start(kPreviewMinIntervalMs - static_cast<int>(elapsed));
+        return;
+    }
+
     // Set* acknowledgements and anything else need no model update.
 }
 
@@ -408,6 +496,16 @@ void ObsState::onRequestFailed(const QString &requestType, int code, const QStri
             return;
         m_muteQueue.takeFirst();
         pumpMuteQueue();
+        return;
+    }
+
+    if (requestType == obs::req::GetSourceScreenshot) {
+        // The preview is high-frequency, so a transient failure (for example
+        // the scene is mid-switch) must not spam errorOccurred() every frame.
+        // Back off and quietly retry while the window is still open.
+        m_previewInFlight = false;
+        if (m_previewEnabled)
+            m_previewTimer->start(kPreviewRetryDelayMs);
         return;
     }
 

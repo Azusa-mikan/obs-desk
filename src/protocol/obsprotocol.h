@@ -67,6 +67,7 @@ constexpr auto GetRecordStatus = "GetRecordStatus";
 constexpr auto StartRecord = "StartRecord";
 constexpr auto StopRecord = "StopRecord";
 constexpr auto GetStats = "GetStats";
+constexpr auto GetSourceScreenshot = "GetSourceScreenshot";
 } // namespace req
 
 /// `eventType` values this client reacts to.

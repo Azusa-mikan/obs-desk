@@ -30,6 +30,8 @@ qt_add_executable(obs_control
     src/ui/dashboardwidget.cpp
     src/ui/audiorow.h
     src/ui/audiorow.cpp
+    src/ui/previewwindow.h
+    src/ui/previewwindow.cpp
 )
 
 target_include_directories(obs_control PRIVATE src)
