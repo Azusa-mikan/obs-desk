@@ -15,4 +15,4 @@ compile_commands.json
 *.o
 *.so
 *.a
-obs_control
+obs_desk

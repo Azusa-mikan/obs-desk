@@ -14,7 +14,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_client(new ObsClient(this))
     , m_state(new ObsState(m_client, this)) {
-    setWindowTitle(tr("OBS Control"));
+    setWindowTitle(tr("OBS Desk"));
     resize(1000, 700);
 
     m_connectWidget = new ConnectWidget(this);

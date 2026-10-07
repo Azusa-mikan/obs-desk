@@ -1,4 +1,4 @@
-# OBS Control
+# OBS Desk
 
 A small Qt 6 Widgets desktop app that remote-controls a local or LAN
 **OBS Studio** instance over the **obs-websocket v5** protocol.
@@ -50,7 +50,7 @@ cmake --build build
 Run:
 
 ```sh
-./build/obs_control
+./build/obs_desk
 ```
 
 ## Enabling WebSocket in OBS
@@ -65,7 +65,7 @@ Run:
 ## Configuration
 
 The last-used connection is stored with `QSettings`
-(`~/.config/obs_control/obs_control.conf` on Linux):
+(`~/.config/obs_desk/obs_desk.conf` on Linux):
 
 - Host and port are always saved.
 - The password is saved **only** when **Remember password** is checked, and it

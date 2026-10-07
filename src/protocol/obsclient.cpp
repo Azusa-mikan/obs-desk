@@ -14,7 +14,7 @@
 #include <QWebSocket>
 
 namespace {
-Q_LOGGING_CATEGORY(obsClientLog, "obs_control.client")
+Q_LOGGING_CATEGORY(obsClientLog, "obs_desk.client")
 
 /// Time allowed for the TCP/WebSocket connect, and separately for the
 /// Hello -> Identify -> Identified exchange after the socket opens.
