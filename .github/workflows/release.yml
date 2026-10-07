@@ -25,6 +25,8 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
+          # Qt 6.8.3's default install does not include QtWebSockets; add it explicitly.
+          modules: 'qtwebsockets'
 
       - name: Install packaging tools
         run: sudo apt-get update && sudo apt-get install -y libfuse2 file
